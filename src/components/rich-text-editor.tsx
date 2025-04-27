@@ -1,9 +1,16 @@
 "use client"
 
 import { useState, useCallback, useMemo, JSX } from "react"
-import { RenderElementProps } from "slate-react"
-import { createEditor, type Descendant } from "slate"
 import {
+  RenderElementProps,
+  RenderLeafProps,
+  useSlate,
+  Slate,
+  Editable,
+} from "slate-react"
+import {
+  createEditor,
+  Descendant,
   Editor,
   Node,
   Element as SlateElement,
@@ -11,14 +18,9 @@ import {
   Transforms,
   BaseEditor,
   BaseText,
+  Location,
 } from "slate"
-import {
-  Slate,
-  Editable,
-  withReact,
-  useSlate,
-  RenderLeafProps,
-} from "slate-react"
+import { withReact } from "slate-react"
 import { withHistory } from "slate-history"
 import {
   Bold,
@@ -38,7 +40,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 
-type CustomElement = {
+type CustomElement = SlateElement & {
   type: string
   children: Descendant[]
 }
@@ -50,23 +52,32 @@ const initialValue: CustomElement[] = [
   },
 ]
 
+type CustomEditorType = Editor & {
+  addMark: (format: string, value: boolean) => void
+  removeMark: (format: string) => void
+  unwrapNodes: (options?: {
+    at?: Location
+    match?: NodeMatch<Node>
+    mode?: "highest" | "lowest"
+    split?: boolean
+    voids?: boolean
+  }) => void
+  setNodes: (props: Partial<SlateElement>) => void
+  wrapNodes: (props: SlateElement) => void
+  marks?: Record<string, boolean> | null
+  selection: Editor["selection"]
+}
+
 const CustomEditor = {
   isMarkActive(
-    editor: { marks?: Record<string, boolean> | null },
+    editor: Pick<CustomEditorType, "marks">,
     format: string
   ): boolean {
     const marks = editor.marks || {}
     return !!marks[format]
   },
 
-  toggleMark(
-    editor: Editor & {
-      addMark: (format: string, value: boolean) => void
-      removeMark: (format: string) => void
-      marks?: Record<string, boolean> | null
-    },
-    format: string
-  ): void {
+  toggleMark(editor: CustomEditorType, format: string): void {
     const isActive = CustomEditor.isMarkActive(editor, format)
     if (isActive) {
       editor.removeMark(format)
@@ -92,24 +103,11 @@ const CustomEditor = {
     return !!match
   },
 
-  toggleBlock(
-    editor: Editor & {
-      unwrapNodes: (options?: {
-        at?: Location
-        match?: NodeMatch<Node>
-        mode?: "highest" | "lowest"
-        split?: boolean
-        voids?: boolean
-      }) => void
-      setNodes: (props: { type: string }) => void
-      wrapNodes: (props: { type: string; children: any[] }) => void
-      selection: any
-    },
-    format: string
-  ): void {
-    const isActive = CustomEditor.isBlockActive(editor as Editor, format)
+  toggleBlock(editor: CustomEditorType, format: string): void {
+    const isActive = CustomEditor.isBlockActive(editor, format)
     const isList = format === "bulleted-list" || format === "numbered-list"
-    Transforms.unwrapNodes(editor as Editor, {
+
+    Transforms.unwrapNodes(editor, {
       match: (n) =>
         !Editor.isEditor(n) &&
         SlateElement.isElement(n) &&
@@ -119,32 +117,23 @@ const CustomEditor = {
     })
 
     const newType = isActive ? "paragraph" : isList ? "list-item" : format
-    Transforms.setNodes(
-      editor as Editor,
-      { type: newType } as Partial<SlateElement>
-    )
+    Transforms.setNodes(editor, { type: newType } as Partial<SlateElement>)
 
     if (!isActive && isList) {
-      Transforms.wrapNodes(
-        editor as Editor,
-        { type: format, children: [] } as SlateElement
-      )
+      Transforms.wrapNodes(editor, {
+        type: format,
+        children: [],
+      } as SlateElement)
     }
   },
 }
 
 interface ElementProps extends RenderElementProps {
-  element: {
-    type?: string
-    children: Descendant[]
-    [key: string]: any
-  }
+  element: CustomElement & { type?: string }
 }
 
-const Element = (props: ElementProps) => {
-  const { attributes, children, element } = props
-
-  switch (element.type) {
+const Element = ({ attributes, children, element }: RenderElementProps) => {
+  switch ((element as CustomElement).type) {
     case "heading-one":
       return (
         <h1 {...attributes} className="text-2xl font-bold my-4">
@@ -217,32 +206,19 @@ const Element = (props: ElementProps) => {
   }
 }
 
-const Leaf = ({
-  attributes,
-  children,
-  leaf,
-}: {
-  attributes: any
-  children: React.ReactNode
+interface LeafProps extends RenderLeafProps {
   leaf: BaseText & {
     bold?: boolean
     italic?: boolean
     underline?: boolean
     code?: boolean
   }
-}) => {
-  if (leaf.bold) {
-    children = <strong>{children}</strong>
-  }
+}
 
-  if (leaf.italic) {
-    children = <em>{children}</em>
-  }
-
-  if (leaf.underline) {
-    children = <u>{children}</u>
-  }
-
+const Leaf = ({ attributes, children, leaf }: LeafProps) => {
+  if (leaf.bold) children = <strong>{children}</strong>
+  if (leaf.italic) children = <em>{children}</em>
+  if (leaf.underline) children = <u>{children}</u>
   if (leaf.code) {
     children = (
       <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-sm">
@@ -250,22 +226,16 @@ const Leaf = ({
       </code>
     )
   }
-
   return <span {...attributes}>{children}</span>
 }
 
-const MarkButton = ({
-  format,
-  icon: Icon,
-}: {
+interface ButtonProps {
   format: string
   icon: React.ComponentType<{ className?: string }>
-}) => {
-  const editor = useSlate() as Editor & {
-    addMark: (format: string, value: boolean) => void
-    removeMark: (format: string) => void
-    marks?: Record<string, boolean> | null
-  }
+}
+
+const MarkButton = ({ format, icon: Icon }: ButtonProps) => {
+  const editor = useSlate() as CustomEditorType
   return (
     <Button
       variant="ghost"
@@ -284,14 +254,8 @@ const MarkButton = ({
   )
 }
 
-const BlockButton = ({
-  format,
-  icon: Icon,
-}: {
-  format: string
-  icon: React.ComponentType<{ className?: string }>
-}) => {
-  const editor = useSlate()
+const BlockButton = ({ format, icon: Icon }: ButtonProps) => {
+  const editor = useSlate() as CustomEditorType
   return (
     <Button
       variant="ghost"
@@ -302,16 +266,7 @@ const BlockButton = ({
       )}
       onMouseDown={(event) => {
         event.preventDefault()
-        CustomEditor.toggleBlock(
-          editor as Editor &
-            BaseEditor & {
-              unwrapNodes: any
-              setNodes: any
-              wrapNodes: any
-              selection: any
-            },
-          format
-        )
+        CustomEditor.toggleBlock(editor, format)
       }}
     >
       <Icon className="h-4 w-4" />
@@ -321,53 +276,34 @@ const BlockButton = ({
 
 export default function RichTextEditor() {
   const editor = useMemo(() => withHistory(withReact(createEditor())), [])
-
   const [value, setValue] = useState<Descendant[]>(initialValue)
 
   const renderElement = useCallback(
-    (props: ElementProps) => <Element {...props} />,
+    (props: RenderElementProps) => <Element {...props} />,
     []
   )
+
   const renderLeaf = useCallback(
-    (props: {
-      attributes: any
-      children: React.ReactNode
-      leaf: {
-        bold?: boolean
-        italic?: boolean
-        underline?: boolean
-        code?: boolean
-      }
-    }) => (
-      <Leaf
-        {...props}
-        leaf={{ ...props.leaf, text: (props.leaf as any).text || "" }}
-      />
-    ),
+    (props: RenderLeafProps) => <Leaf {...props} />,
     []
   )
 
-  interface HandleKeyDownEvent extends React.KeyboardEvent<HTMLDivElement> {}
-
-  const handleKeyDown = (event: HandleKeyDownEvent): void => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     if (!event.ctrlKey && !event.metaKey) return
 
     switch (event.key) {
-      case "b": {
+      case "b":
         event.preventDefault()
-        CustomEditor.toggleMark(editor, "bold")
+        CustomEditor.toggleMark(editor as CustomEditorType, "bold")
         break
-      }
-      case "i": {
+      case "i":
         event.preventDefault()
-        CustomEditor.toggleMark(editor, "italic")
+        CustomEditor.toggleMark(editor as CustomEditorType, "italic")
         break
-      }
-      case "u": {
+      case "u":
         event.preventDefault()
-        CustomEditor.toggleMark(editor, "underline")
+        CustomEditor.toggleMark(editor as CustomEditorType, "underline")
         break
-      }
     }
   }
 
@@ -407,7 +343,7 @@ export default function RichTextEditor() {
           <div className="bg-white p-4 rounded-b-lg min-h-[400px]">
             <Editable
               renderElement={renderElement}
-              renderLeaf={renderLeaf as (props: RenderLeafProps) => JSX.Element}
+              renderLeaf={renderLeaf}
               placeholder="Start typing..."
               spellCheck
               autoFocus
