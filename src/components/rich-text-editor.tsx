@@ -32,18 +32,10 @@ import {
   Quote,
   Code,
   AlertCircle,
-  ChevronDown,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 
 type CustomElement = {
