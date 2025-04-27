@@ -127,10 +127,6 @@ const CustomEditor = {
   },
 }
 
-interface ElementProps extends RenderElementProps {
-  element: CustomElement & { type?: string }
-}
-
 const Element = ({ attributes, children, element }: RenderElementProps) => {
   switch ((element as CustomElement).type) {
     case "heading-one":
