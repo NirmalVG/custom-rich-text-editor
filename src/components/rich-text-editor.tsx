@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, JSX } from "react"
+import { useState, useCallback, useMemo } from "react"
 import {
   RenderElementProps,
   RenderLeafProps,
@@ -16,7 +16,6 @@ import {
   Element as SlateElement,
   NodeMatch,
   Transforms,
-  BaseEditor,
   BaseText,
   Location,
 } from "slate"
