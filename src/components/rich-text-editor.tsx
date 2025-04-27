@@ -43,13 +43,6 @@ type CustomElement = {
   children: Descendant[]
 }
 
-type CustomText = {
-  bold?: boolean
-  italic?: boolean
-  underline?: boolean
-  code?: boolean
-} & Descendant
-
 const initialValue: CustomElement[] = [
   {
     type: "paragraph",
